@@ -13,34 +13,36 @@ const overrides = {
 }
 const gasUsed = {
   MerkleDistributor: {
-    twoAccountTree: 81970,
-    largerTreeFirstClaim: 85307,
-    largerTreeSecondClaim: 68207,
-    realisticTreeGas: 95256,
-    realisticTreeGasDeeperNode: 95172,
-    realisticTreeGasAverageRandom: 78598,
-    realisticTreeGasAverageFirst25: 62332,
+    twoAccountTree: 84112,
+    largerTreeFirstClaim: 87463,
+    largerTreeSecondClaim: 70363,
+    realisticTreeGas: 97468,
+    realisticTreeGasDeeperNode: 97440,
+    realisticTreeGasAverageRandom: 80850,
+    realisticTreeGasAverageFirst25: 64584,
   },
   MerkleDistributorWithDeadline: {
-    twoAccountTree: 82102,
-    largerTreeFirstClaim: 85439,
-    largerTreeSecondClaim: 68339,
-    realisticTreeGas: 95388,
-    realisticTreeGasDeeperNode: 95304,
-    realisticTreeGasAverageRandom: 78730,
-    realisticTreeGasAverageFirst25: 62464,
+    twoAccountTree: 84186,
+    largerTreeFirstClaim: 87537,
+    largerTreeSecondClaim: 70437,
+    realisticTreeGas: 97542,
+    realisticTreeGasDeeperNode: 97514,
+    realisticTreeGasAverageRandom: 80924,
+    realisticTreeGasAverageFirst25: 64658,
   },
 }
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
-const deployContract = async (factory: ContractFactory, tokenAddress: string, merkleRoot: string, contract: string) => {
+const deployContract = async (factory: ContractFactory, tokenAddress: string, merkleRoot: string, contract: string, owner?: string) => {
   let distributor
   const currentTimestamp = Math.floor(Date.now() / 1000)
+  const wallets = await ethers.getSigners()
+  const ownerAddress = owner || wallets[0].address
   if (contract === 'MerkleDistributorWithDeadline') {
-    distributor = await factory.deploy(tokenAddress, merkleRoot, currentTimestamp + 31536000, overrides)
+    distributor = await factory.deploy(tokenAddress, merkleRoot, currentTimestamp + 31536000, ownerAddress, overrides)
   } else {
-    distributor = await factory.deploy(tokenAddress, merkleRoot, overrides)
+    distributor = await factory.deploy(tokenAddress, merkleRoot, ownerAddress, overrides)
   }
   return distributor
 }
@@ -79,12 +81,12 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
     describe('#claim', () => {
       it('fails for empty proof', async () => {
         const distributor = await deployContract(distributorFactory, token.address, ZERO_BYTES32, contract)
-        await expect(distributor.claim(0, wallet0.address, 10, [])).to.be.revertedWith('InvalidProof()')
+        await expect(distributor.claim(0, wallet0.address, 10, [])).to.be.revertedWith('InvalidProof')
       })
 
       it('fails for invalid index', async () => {
         const distributor = await deployContract(distributorFactory, token.address, ZERO_BYTES32, contract)
-        await expect(distributor.claim(0, wallet0.address, 10, [])).to.be.revertedWith('InvalidProof()')
+        await expect(distributor.claim(0, wallet0.address, 10, [])).to.be.revertedWith('InvalidProof')
       })
 
       describe('two account tree', () => {
@@ -138,7 +140,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
           const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
           await distributor.claim(0, wallet0.address, 100, proof0, overrides)
           await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides)).to.be.revertedWith(
-            'AlreadyClaimed()'
+            'AlreadyClaimed'
           )
         })
 
@@ -166,7 +168,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
               tree.getProof(0, wallet0.address, BigNumber.from(100)),
               overrides
             )
-          ).to.be.revertedWith('AlreadyClaimed()')
+          ).to.be.revertedWith('AlreadyClaimed')
         })
 
         it('cannot claim more than once: 1 and then 0', async () => {
@@ -193,20 +195,20 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
               tree.getProof(1, wallet1.address, BigNumber.from(101)),
               overrides
             )
-          ).to.be.revertedWith('AlreadyClaimed()')
+          ).to.be.revertedWith('AlreadyClaimed')
         })
 
         it('cannot claim for address other than proof', async () => {
           const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
           await expect(distributor.claim(1, wallet1.address, 101, proof0, overrides)).to.be.revertedWith(
-            'InvalidProof()'
+            'InvalidProof'
           )
         })
 
         it('cannot claim more than proof', async () => {
           const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
           await expect(distributor.claim(0, wallet0.address, 101, proof0, overrides)).to.be.revertedWith(
-            'InvalidProof()'
+            'InvalidProof'
           )
         })
 
@@ -345,7 +347,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
             const proof = tree.getProof(i, wallet0.address, BigNumber.from(100))
             await distributor.claim(i, wallet0.address, 100, proof, overrides)
             await expect(distributor.claim(i, wallet0.address, 100, proof, overrides)).to.be.revertedWith(
-              'AlreadyClaimed()'
+              'AlreadyClaimed'
             )
           }
         })
@@ -406,7 +408,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
               .withArgs(claim.index, account, claim.amount)
             await expect(
               distributor.claim(claim.index, account, claim.amount, claim.proof, overrides)
-            ).to.be.revertedWith('AlreadyClaimed()')
+            ).to.be.revertedWith('AlreadyClaimed')
           }
           expect(await token.balanceOf(distributor.address)).to.eq(0)
         })
@@ -443,6 +445,7 @@ describe('#MerkleDistributorWithDeadline', () => {
       token.address,
       tree.getHexRoot(),
       currentTimestamp + 31536000,
+      wallet0.address,
       overrides
     )
     await token.setBalance(distributor.address, 201)
@@ -461,7 +464,7 @@ describe('#MerkleDistributorWithDeadline', () => {
   })
 
   it('cannot withdraw during claim window', async () => {
-    await expect(distributor.withdraw(overrides)).to.be.revertedWith('NoWithdrawDuringClaim()')
+    await expect(distributor.withdraw(overrides)).to.be.revertedWith('NoWithdrawDuringClaim')
   })
 
   it('cannot claim after end time', async () => {
@@ -470,7 +473,7 @@ describe('#MerkleDistributorWithDeadline', () => {
     currentTimestamp = oneSecondAfterEndTime
     const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
     await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides)).to.be.revertedWith(
-      'ClaimWindowFinished()'
+      'ClaimWindowFinished'
     )
   })
 
@@ -488,5 +491,259 @@ describe('#MerkleDistributorWithDeadline', () => {
     await ethers.provider.send('evm_mine', [oneSecondAfterEndTime])
     distributor = distributor.connect(wallet1)
     await expect(distributor.withdraw(overrides)).to.be.revertedWith('Ownable: caller is not the owner')
+  })
+})
+
+describe('MerkleDistributor - New Features', () => {
+  let token: Contract
+  let redeemToken: Contract
+  let distributor: Contract
+  let wallet0: SignerWithAddress
+  let wallet1: SignerWithAddress
+  let wallet2: SignerWithAddress
+  let tree: BalanceTree
+
+  beforeEach('deploy', async () => {
+    const wallets = await ethers.getSigners()
+    wallet0 = wallets[0]
+    wallet1 = wallets[1]
+    wallet2 = wallets[2]
+
+    const tokenFactory = await ethers.getContractFactory('TestERC20', wallet0)
+    token = await tokenFactory.deploy('Token', 'TKN', 0, overrides)
+    redeemToken = await tokenFactory.deploy('Redeem Token', 'RTKN', 0, overrides)
+
+    tree = new BalanceTree([
+      { account: wallet0.address, amount: BigNumber.from(100) },
+      { account: wallet1.address, amount: BigNumber.from(101) },
+    ])
+
+    const distributorFactory = await ethers.getContractFactory('MerkleDistributor', wallet0)
+    distributor = await distributorFactory.deploy(token.address, tree.getHexRoot(), wallet0.address, overrides)
+    await token.setBalance(distributor.address, 201)
+  })
+
+  describe('Pausable functionality', () => {
+    it('should allow claiming when not paused', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides))
+        .to.emit(distributor, 'Claimed')
+        .withArgs(0, wallet0.address, 100)
+    })
+
+    it('should not allow non-owner to pause', async () => {
+      await expect(distributor.connect(wallet1).pause(overrides)).to.be.revertedWith(
+        'Ownable: caller is not the owner'
+      )
+    })
+
+    it('should allow owner to pause', async () => {
+      await expect(distributor.pause(overrides)).to.emit(distributor, 'Paused').withArgs(wallet0.address)
+    })
+
+    it('should not allow claiming when paused', async () => {
+      await distributor.pause(overrides)
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides)).to.be.revertedWith(
+        'Pausable: paused'
+      )
+    })
+
+    it('should allow owner to unpause', async () => {
+      await distributor.pause(overrides)
+      await expect(distributor.unpause(overrides)).to.emit(distributor, 'Unpaused').withArgs(wallet0.address)
+    })
+
+    it('should not allow non-owner to unpause', async () => {
+      await distributor.pause(overrides)
+      await expect(distributor.connect(wallet1).unpause(overrides)).to.be.revertedWith(
+        'Ownable: caller is not the owner'
+      )
+    })
+
+    it('should allow claiming after unpause', async () => {
+      await distributor.pause(overrides)
+      await distributor.unpause(overrides)
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides))
+        .to.emit(distributor, 'Claimed')
+        .withArgs(0, wallet0.address, 100)
+    })
+
+    it('should not allow claimFromRedemption when paused', async () => {
+      await distributor.pause(overrides)
+      await redeemToken.setBalance(distributor.address, 100)
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(
+        distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
+      ).to.be.revertedWith('Pausable: paused')
+    })
+  })
+
+  describe('Ownership transfer (2-step)', () => {
+    it('should have wallet0 as initial owner', async () => {
+      expect(await distributor.owner()).to.eq(wallet0.address)
+    })
+
+    it('should not allow non-owner to transfer ownership', async () => {
+      await expect(distributor.connect(wallet1).transferOwnership(wallet2.address, overrides)).to.be.revertedWith(
+        'Ownable: caller is not the owner'
+      )
+    })
+
+    it('should allow owner to initiate ownership transfer', async () => {
+      await expect(distributor.transferOwnership(wallet1.address, overrides))
+        .to.emit(distributor, 'OwnershipTransferStarted')
+        .withArgs(wallet0.address, wallet1.address)
+      expect(await distributor.owner()).to.eq(wallet0.address)
+      expect(await distributor.pendingOwner()).to.eq(wallet1.address)
+    })
+
+    it('should not transfer ownership until new owner accepts', async () => {
+      await distributor.transferOwnership(wallet1.address, overrides)
+      expect(await distributor.owner()).to.eq(wallet0.address)
+      await expect(distributor.pause(overrides)).to.emit(distributor, 'Paused')
+    })
+
+    it('should not allow non-pending-owner to accept ownership', async () => {
+      await distributor.transferOwnership(wallet1.address, overrides)
+      await expect(distributor.connect(wallet2).acceptOwnership(overrides)).to.be.revertedWith(
+        'Ownable2Step: caller is not the new owner'
+      )
+    })
+
+    it('should complete ownership transfer when pending owner accepts', async () => {
+      await distributor.transferOwnership(wallet1.address, overrides)
+      await expect(distributor.connect(wallet1).acceptOwnership(overrides))
+        .to.emit(distributor, 'OwnershipTransferred')
+        .withArgs(wallet0.address, wallet1.address)
+      expect(await distributor.owner()).to.eq(wallet1.address)
+      expect(await distributor.pendingOwner()).to.eq(constants.AddressZero)
+    })
+
+    it('should allow new owner to use owner functions after transfer', async () => {
+      await distributor.transferOwnership(wallet1.address, overrides)
+      await distributor.connect(wallet1).acceptOwnership(overrides)
+      await expect(distributor.connect(wallet1).pause(overrides)).to.emit(distributor, 'Paused')
+    })
+
+    it('should not allow old owner to use owner functions after transfer', async () => {
+      await distributor.transferOwnership(wallet1.address, overrides)
+      await distributor.connect(wallet1).acceptOwnership(overrides)
+      await expect(distributor.pause(overrides)).to.be.revertedWith('Ownable: caller is not the owner')
+    })
+  })
+
+  describe('Token rescue', () => {
+    let rescueToken: Contract
+
+    beforeEach('setup rescue token', async () => {
+      const tokenFactory = await ethers.getContractFactory('TestERC20', wallet0)
+      rescueToken = await tokenFactory.deploy('Rescue Token', 'RSC', 0, overrides)
+      await rescueToken.setBalance(distributor.address, 1000)
+    })
+
+    it('should not allow non-owner to rescue tokens', async () => {
+      await expect(
+        distributor.connect(wallet1).rescueTokens(rescueToken.address, wallet1.address, 500, overrides)
+      ).to.be.revertedWith('Ownable: caller is not the owner')
+    })
+
+    it('should allow owner to rescue tokens', async () => {
+      expect(await rescueToken.balanceOf(wallet1.address)).to.eq(0)
+      await distributor.rescueTokens(rescueToken.address, wallet1.address, 500, overrides)
+      expect(await rescueToken.balanceOf(wallet1.address)).to.eq(500)
+      expect(await rescueToken.balanceOf(distributor.address)).to.eq(500)
+    })
+
+    it('should allow owner to rescue all tokens', async () => {
+      await distributor.rescueTokens(rescueToken.address, wallet1.address, 1000, overrides)
+      expect(await rescueToken.balanceOf(wallet1.address)).to.eq(1000)
+      expect(await rescueToken.balanceOf(distributor.address)).to.eq(0)
+    })
+
+    it('should allow owner to rescue distribution token', async () => {
+      expect(await token.balanceOf(wallet2.address)).to.eq(0)
+      await distributor.rescueTokens(token.address, wallet2.address, 100, overrides)
+      expect(await token.balanceOf(wallet2.address)).to.eq(100)
+      expect(await token.balanceOf(distributor.address)).to.eq(101)
+    })
+
+    it('should revert if trying to rescue more tokens than available', async () => {
+      await expect(
+        distributor.rescueTokens(rescueToken.address, wallet1.address, 1001, overrides)
+      ).to.be.revertedWith('ERC20: transfer amount exceeds balance')
+    })
+
+    it('should allow rescue even when contract is paused', async () => {
+      await distributor.pause(overrides)
+      await distributor.rescueTokens(rescueToken.address, wallet1.address, 500, overrides)
+      expect(await rescueToken.balanceOf(wallet1.address)).to.eq(500)
+    })
+  })
+
+  describe('claimFromRedemption', () => {
+    beforeEach('setup redeem token', async () => {
+      await redeemToken.setBalance(distributor.address, 500)
+    })
+
+    it('should successfully claim from redemption', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      expect(await redeemToken.balanceOf(wallet0.address)).to.eq(0)
+      await expect(
+        distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
+      )
+        .to.emit(distributor, 'Claimed')
+        .withArgs(0, wallet0.address, 500)
+      expect(await redeemToken.balanceOf(wallet0.address)).to.eq(500)
+      expect(await redeemToken.balanceOf(distributor.address)).to.eq(0)
+    })
+
+    it('should transfer entire balance of redeem token', async () => {
+      await redeemToken.setBalance(distributor.address, 1234)
+      const proof1 = tree.getProof(1, wallet1.address, BigNumber.from(101))
+      await distributor.claimFromRedemption(1, wallet1.address, 101, proof1, redeemToken.address, overrides)
+      expect(await redeemToken.balanceOf(wallet1.address)).to.eq(1234)
+      expect(await redeemToken.balanceOf(distributor.address)).to.eq(0)
+    })
+
+    it('should fail if already claimed', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
+      await expect(
+        distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
+      ).to.be.revertedWith('AlreadyClaimed')
+    })
+
+    it('should fail with invalid proof', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(
+        distributor.claimFromRedemption(1, wallet1.address, 101, proof0, redeemToken.address, overrides)
+      ).to.be.revertedWith('InvalidProof')
+    })
+
+    it('should not allow claimFromRedemption with regular claim proof for different amount', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await expect(
+        distributor.claimFromRedemption(0, wallet0.address, 101, proof0, redeemToken.address, overrides)
+      ).to.be.revertedWith('InvalidProof')
+    })
+
+    it('should mark index as claimed for both claim types', async () => {
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      await distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
+      expect(await distributor.isClaimed(0)).to.eq(true)
+      await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides)).to.be.revertedWith(
+        'AlreadyClaimed'
+      )
+    })
+
+    it('should not allow claimFromRedemption if already claimed via regular claim', async () => {
+      const proof1 = tree.getProof(1, wallet1.address, BigNumber.from(101))
+      await distributor.claim(1, wallet1.address, 101, proof1, overrides)
+      await expect(
+        distributor.claimFromRedemption(1, wallet1.address, 101, proof1, redeemToken.address, overrides)
+      ).to.be.revertedWith('AlreadyClaimed')
+    })
   })
 })
