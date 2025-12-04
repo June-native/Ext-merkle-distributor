@@ -11,7 +11,8 @@ program
 
 program.parse(process.argv)
 
-const json = JSON.parse(fs.readFileSync(program.input, { encoding: 'utf8' }))
+const options = program.opts()
+const json = JSON.parse(fs.readFileSync(options.input, { encoding: 'utf8' }))
 
 if (typeof json !== 'object') throw new Error('Invalid JSON')
 
