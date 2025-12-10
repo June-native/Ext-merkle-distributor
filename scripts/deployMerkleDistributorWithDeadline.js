@@ -7,6 +7,7 @@ async function main() {
   const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS
   const MERKLE_ROOT = process.env.MERKLE_ROOT
   const OWNER_ADDRESS = process.env.OWNER_ADDRESS
+  const FUNDER_ADDRESS = process.env.FUNDER_ADDRESS
   const END_TIME = process.env.END_TIME
 
   // Validate parameters
@@ -19,6 +20,9 @@ async function main() {
   if (!OWNER_ADDRESS) {
     throw new Error('OWNER_ADDRESS environment variable is required')
   }
+  if (!FUNDER_ADDRESS) {
+    throw new Error('FUNDER_ADDRESS environment variable is required')
+  }
   if (!END_TIME) {
     throw new Error('END_TIME environment variable is required (Unix timestamp)')
   }
@@ -30,6 +34,7 @@ async function main() {
   console.log('  Token Address:', TOKEN_ADDRESS)
   console.log('  Merkle Root:', MERKLE_ROOT)
   console.log('  Owner Address:', OWNER_ADDRESS)
+  console.log('  Funder Address:', FUNDER_ADDRESS)
   console.log('  End Time:', endTimeNumber, `(${endTimeDate.toISOString()})`)
   console.log('')
 
@@ -43,7 +48,8 @@ async function main() {
     TOKEN_ADDRESS,
     MERKLE_ROOT,
     endTimeNumber,
-    OWNER_ADDRESS
+    OWNER_ADDRESS,
+    FUNDER_ADDRESS
   )
 
   console.log('Waiting for deployment...')
@@ -57,9 +63,12 @@ async function main() {
   console.log('')
   console.log('Next steps:')
   console.log('1. Verify the contract on BSCScan')
-  console.log('2. Transfer tokens to the contract:', merkleDistributorWithDeadline.address)
+  console.log('2. Funder must approve the contract to spend tokens:')
+  console.log('   - Funder Address:', FUNDER_ADDRESS)
+  console.log('   - Contract Address:', merkleDistributorWithDeadline.address)
+  console.log('   - Approve sufficient token amount for all claims')
   console.log('3. Distribute the claims JSON to eligible users')
-  console.log('4. After', endTimeDate.toISOString(), 'owner can withdraw unclaimed tokens')
+  console.log('4. After', endTimeDate.toISOString(), 'owner can withdraw any tokens in the contract')
 }
 
 main()

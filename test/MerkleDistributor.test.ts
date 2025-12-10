@@ -13,38 +13,44 @@ const overrides = {
 }
 const gasUsed = {
   MerkleDistributor: {
-    twoAccountTree: 84112,
-    largerTreeFirstClaim: 87463,
-    largerTreeSecondClaim: 70363,
-    realisticTreeGas: 97468,
-    realisticTreeGasDeeperNode: 97440,
-    realisticTreeGasAverageRandom: 80850,
-    realisticTreeGasAverageFirst25: 64584,
+    twoAccountTree: 86726,
+    largerTreeFirstClaim: 89240,
+    largerTreeSecondClaim: 72160,
+    realisticTreeGas: 100082,
+    realisticTreeGasDeeperNode: 100054,
+    realisticTreeGasAverageRandom: 83464,
+    realisticTreeGasAverageFirst25: 67198,
   },
   MerkleDistributorWithDeadline: {
-    twoAccountTree: 84186,
-    largerTreeFirstClaim: 87537,
-    largerTreeSecondClaim: 70437,
-    realisticTreeGas: 97542,
-    realisticTreeGasDeeperNode: 97514,
-    realisticTreeGasAverageRandom: 80924,
-    realisticTreeGasAverageFirst25: 64658,
+    twoAccountTree: 86811,
+    largerTreeFirstClaim: 89325,
+    largerTreeSecondClaim: 72245,
+    realisticTreeGas: 100167,
+    realisticTreeGasDeeperNode: 100139,
+    realisticTreeGasAverageRandom: 83549,
+    realisticTreeGasAverageFirst25: 67283,
   },
 }
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
-const deployContract = async (factory: ContractFactory, tokenAddress: string, merkleRoot: string, contract: string, owner?: string) => {
+const deployContract = async (factory: ContractFactory, tokenAddress: string, merkleRoot: string, contract: string, owner?: string, funder?: string) => {
   let distributor
   const currentTimestamp = Math.floor(Date.now() / 1000)
   const wallets = await ethers.getSigners()
   const ownerAddress = owner || wallets[0].address
+  const funderAddress = funder || wallets[0].address
   if (contract === 'MerkleDistributorWithDeadline') {
-    distributor = await factory.deploy(tokenAddress, merkleRoot, currentTimestamp + 31536000, ownerAddress, overrides)
+    distributor = await factory.deploy(tokenAddress, merkleRoot, currentTimestamp + 31536000, ownerAddress, funderAddress, overrides)
   } else {
-    distributor = await factory.deploy(tokenAddress, merkleRoot, ownerAddress, overrides)
+    distributor = await factory.deploy(tokenAddress, merkleRoot, ownerAddress, funderAddress, overrides)
   }
   return distributor
+}
+
+const setupFunder = async (token: Contract, funder: SignerWithAddress, distributor: Contract, amount: BigNumber | number) => {
+  await token.setBalance(funder.address, amount)
+  await token.connect(funder).approve(distributor.address, constants.MaxUint256)
 }
 
 for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
@@ -92,13 +98,15 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
       describe('two account tree', () => {
         let distributor: Contract
         let tree: BalanceTree
+        let funder: SignerWithAddress
         beforeEach('deploy', async () => {
+          funder = wallets[10] // Use a separate wallet as funder
           tree = new BalanceTree([
             { account: wallet0.address, amount: BigNumber.from(100) },
             { account: wallet1.address, amount: BigNumber.from(101) },
           ])
-          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract)
-          await token.setBalance(distributor.address, 201)
+          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract, wallet0.address, funder.address)
+          await setupFunder(token, funder, distributor, 201)
         })
 
         it('successful claim', async () => {
@@ -121,7 +129,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
 
         it('must have enough to transfer', async () => {
           const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
-          await token.setBalance(distributor.address, 99)
+          await token.setBalance(funder.address, 99)
           await expect(distributor.claim(0, wallet0.address, 100, proof0, overrides)).to.be.revertedWith(
             'ERC20: transfer amount exceeds balance'
           )
@@ -223,14 +231,16 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
       describe('larger tree', () => {
         let distributor: Contract
         let tree: BalanceTree
+        let funder: SignerWithAddress
         beforeEach('deploy', async () => {
+          funder = wallets[10] // Use a separate wallet as funder
           tree = new BalanceTree(
-            wallets.map((wallet, ix) => {
+            wallets.slice(0, 10).map((wallet, ix) => {
               return { account: wallet.address, amount: BigNumber.from(ix + 1) }
             })
           )
-          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract)
-          await token.setBalance(distributor.address, 201)
+          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract, wallet0.address, funder.address)
+          await setupFunder(token, funder, distributor, 201)
         })
 
         it('claim index 4', async () => {
@@ -277,18 +287,20 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
       describe('realistic size tree', () => {
         let distributor: Contract
         let tree: BalanceTree
+        let funder: SignerWithAddress
         const NUM_LEAVES = 100_000
         const NUM_SAMPLES = 25
 
         beforeEach('deploy', async () => {
+          funder = wallets[10] // Use a separate wallet as funder
           const elements: { account: string; amount: BigNumber }[] = []
           for (let i = 0; i < NUM_LEAVES; i++) {
             const node = { account: wallet0.address, amount: BigNumber.from(100) }
             elements.push(node)
           }
           tree = new BalanceTree(elements)
-          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract)
-          await token.setBalance(distributor.address, constants.MaxUint256)
+          distributor = await deployContract(distributorFactory, token.address, tree.getHexRoot(), contract, wallet0.address, funder.address)
+          await setupFunder(token, funder, distributor, constants.MaxUint256)
         })
 
         it('proof verification works', () => {
@@ -355,6 +367,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
 
       describe('parseBalanceMap', () => {
         let distributor: Contract
+        let funder: SignerWithAddress
         let claims: {
           [account: string]: {
             index: number
@@ -363,6 +376,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
           }
         }
         beforeEach('deploy', async () => {
+          funder = wallets[10] // Use a separate wallet as funder
           const { claims: innerClaims, merkleRoot, tokenTotal } = parseBalanceMap({
             [wallet0.address]: 200,
             [wallet1.address]: 300,
@@ -370,8 +384,8 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
           })
           expect(tokenTotal).to.eq('0x02ee') // 750
           claims = innerClaims
-          distributor = await deployContract(distributorFactory, token.address, merkleRoot, contract)
-          await token.setBalance(distributor.address, tokenTotal)
+          distributor = await deployContract(distributorFactory, token.address, merkleRoot, contract, wallet0.address, funder.address)
+          await setupFunder(token, funder, distributor, BigNumber.from(tokenTotal))
         })
 
         it('check the proofs is as expected', () => {
@@ -410,7 +424,7 @@ for (const contract of ['MerkleDistributor', 'MerkleDistributorWithDeadline']) {
               distributor.claim(claim.index, account, claim.amount, claim.proof, overrides)
             ).to.be.revertedWith('AlreadyClaimed')
           }
-          expect(await token.balanceOf(distributor.address)).to.eq(0)
+          expect(await token.balanceOf(funder.address)).to.eq(0)
         })
       })
     })
@@ -446,9 +460,10 @@ describe('#MerkleDistributorWithDeadline', () => {
       tree.getHexRoot(),
       currentTimestamp + 31536000,
       wallet0.address,
+      wallet0.address,
       overrides
     )
-    await token.setBalance(distributor.address, 201)
+    await setupFunder(token, wallet0, distributor, 201)
   })
 
   it('successful claim', async () => {
@@ -481,9 +496,12 @@ describe('#MerkleDistributorWithDeadline', () => {
     const oneSecondAfterEndTime = currentTimestamp + 31536001
     await ethers.provider.send('evm_mine', [oneSecondAfterEndTime])
     currentTimestamp = oneSecondAfterEndTime
-    expect(await token.balanceOf(wallet0.address)).to.eq(0)
+    const initialBalance = await token.balanceOf(wallet0.address)
+    // With the new stateless design, distributor holds 0 tokens normally
+    expect(await token.balanceOf(distributor.address)).to.eq(0)
     await distributor.withdraw(overrides)
-    expect(await token.balanceOf(wallet0.address)).to.eq(201)
+    // Balance should be unchanged since distributor had 0 tokens
+    expect(await token.balanceOf(wallet0.address)).to.eq(initialBalance)
   })
 
   it('only owner can withdraw even after end time', async () => {
@@ -501,6 +519,7 @@ describe('MerkleDistributor - New Features', () => {
   let wallet0: SignerWithAddress
   let wallet1: SignerWithAddress
   let wallet2: SignerWithAddress
+  let funder: SignerWithAddress
   let tree: BalanceTree
 
   beforeEach('deploy', async () => {
@@ -508,6 +527,7 @@ describe('MerkleDistributor - New Features', () => {
     wallet0 = wallets[0]
     wallet1 = wallets[1]
     wallet2 = wallets[2]
+    funder = wallets[10] // Use a separate wallet as funder
 
     const tokenFactory = await ethers.getContractFactory('TestERC20', wallet0)
     token = await tokenFactory.deploy('Token', 'TKN', 0, overrides)
@@ -519,8 +539,8 @@ describe('MerkleDistributor - New Features', () => {
     ])
 
     const distributorFactory = await ethers.getContractFactory('MerkleDistributor', wallet0)
-    distributor = await distributorFactory.deploy(token.address, tree.getHexRoot(), wallet0.address, overrides)
-    await token.setBalance(distributor.address, 201)
+    distributor = await distributorFactory.deploy(token.address, tree.getHexRoot(), wallet0.address, funder.address, overrides)
+    await setupFunder(token, funder, distributor, 201)
   })
 
   describe('Pausable functionality', () => {
@@ -663,10 +683,13 @@ describe('MerkleDistributor - New Features', () => {
     })
 
     it('should allow owner to rescue distribution token', async () => {
+      // With the new stateless design, the distributor holds 0 tokens
+      // First send some tokens to the distributor to rescue
+      await token.setBalance(distributor.address, 200)
       expect(await token.balanceOf(wallet2.address)).to.eq(0)
       await distributor.rescueTokens(token.address, wallet2.address, 100, overrides)
       expect(await token.balanceOf(wallet2.address)).to.eq(100)
-      expect(await token.balanceOf(distributor.address)).to.eq(101)
+      expect(await token.balanceOf(distributor.address)).to.eq(100)
     })
 
     it('should revert if trying to rescue more tokens than available', async () => {
@@ -690,11 +713,16 @@ describe('MerkleDistributor - New Features', () => {
     it('should successfully claim from redemption', async () => {
       const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
       expect(await redeemToken.balanceOf(wallet0.address)).to.eq(0)
+      expect(await token.balanceOf(wallet0.address)).to.eq(0)
       await expect(
         distributor.claimFromRedemption(0, wallet0.address, 100, proof0, redeemToken.address, overrides)
       )
         .to.emit(distributor, 'Claimed')
-        .withArgs(0, wallet0.address, 500)
+        .withArgs(0, wallet0.address, 100)
+        .to.emit(distributor, 'RedemptionClaimed')
+        .withArgs(wallet0.address, 500)
+      // Should receive both the claiming token (100) and redeemed token (500)
+      expect(await token.balanceOf(wallet0.address)).to.eq(100)
       expect(await redeemToken.balanceOf(wallet0.address)).to.eq(500)
       expect(await redeemToken.balanceOf(distributor.address)).to.eq(0)
     })

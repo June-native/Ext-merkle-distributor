@@ -7,6 +7,7 @@ async function main() {
   const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS
   const MERKLE_ROOT = process.env.MERKLE_ROOT
   const OWNER_ADDRESS = process.env.OWNER_ADDRESS
+  const FUNDER_ADDRESS = process.env.FUNDER_ADDRESS
 
   // Validate parameters
   if (!TOKEN_ADDRESS) {
@@ -18,11 +19,15 @@ async function main() {
   if (!OWNER_ADDRESS) {
     throw new Error('OWNER_ADDRESS environment variable is required')
   }
+  if (!FUNDER_ADDRESS) {
+    throw new Error('FUNDER_ADDRESS environment variable is required')
+  }
 
   console.log('Deploying MerkleDistributor with:')
   console.log('  Token Address:', TOKEN_ADDRESS)
   console.log('  Merkle Root:', MERKLE_ROOT)
   console.log('  Owner Address:', OWNER_ADDRESS)
+  console.log('  Funder Address:', FUNDER_ADDRESS)
   console.log('')
 
   const [deployer] = await ethers.getSigners()
@@ -31,7 +36,7 @@ async function main() {
   console.log('')
 
   const MerkleDistributor = await ethers.getContractFactory('MerkleDistributor')
-  const merkleDistributor = await MerkleDistributor.deploy(TOKEN_ADDRESS, MERKLE_ROOT, OWNER_ADDRESS)
+  const merkleDistributor = await MerkleDistributor.deploy(TOKEN_ADDRESS, MERKLE_ROOT, OWNER_ADDRESS, FUNDER_ADDRESS)
 
   console.log('Waiting for deployment...')
   await merkleDistributor.deployed()
@@ -44,7 +49,10 @@ async function main() {
   console.log('')
   console.log('Next steps:')
   console.log('1. Verify the contract on BSCScan')
-  console.log('2. Transfer tokens to the contract:', merkleDistributor.address)
+  console.log('2. Funder must approve the contract to spend tokens:')
+  console.log('   - Funder Address:', FUNDER_ADDRESS)
+  console.log('   - Contract Address:', merkleDistributor.address)
+  console.log('   - Approve sufficient token amount for all claims')
   console.log('3. Distribute the claims JSON to eligible users')
 }
 

@@ -16,13 +16,15 @@ contract MerkleDistributor is IMerkleDistributor, Ownable2Step, Pausable {
 
     address public immutable override token;
     bytes32 public immutable override merkleRoot;
+    address public immutable funder;
 
     // This is a packed array of booleans.
     mapping(uint256 => uint256) private claimedBitMap;
 
-    constructor(address token_, bytes32 merkleRoot_, address owner_) {
+    constructor(address token_, bytes32 merkleRoot_, address owner_, address funder_) {
         token = token_;
         merkleRoot = merkleRoot_;
+        funder = funder_;
         _transferOwnership(owner_);
     }
 
@@ -61,8 +63,8 @@ contract MerkleDistributor is IMerkleDistributor, Ownable2Step, Pausable {
     {
         _validateAndClaim(index, account, amount, merkleProof);
 
-        // Send the token
-        IERC20(token).safeTransfer(account, amount);
+        // Transfer the token from funder to account
+        IERC20(token).safeTransferFrom(funder, account, amount);
 
         emit Claimed(index, account, amount);
     }
@@ -84,13 +86,18 @@ contract MerkleDistributor is IMerkleDistributor, Ownable2Step, Pausable {
     ) external whenNotPaused {
         _validateAndClaim(index, account, amount, merkleProof);
 
-        // Get the entire balance of redeemed tokens (already sent by FixedTermYield)
+        // Transfer the token from funder to account
+        IERC20(token).safeTransferFrom(funder, account, amount);
+
+        // Get the entire balance of redeemed tokens (already sent)
         uint256 balanceToTransfer = IERC20(redeemTokenAddress).balanceOf(address(this));
         
         // Transfer all redeemed tokens to the account
         IERC20(redeemTokenAddress).safeTransfer(account, balanceToTransfer);
 
-        emit Claimed(index, account, balanceToTransfer);
+        emit Claimed(index, account, amount);
+
+        emit RedemptionClaimed(account, balanceToTransfer);
     }
 
     /// @notice Pause all claiming functions

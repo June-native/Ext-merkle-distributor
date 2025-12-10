@@ -13,8 +13,8 @@ contract MerkleDistributorWithDeadline is MerkleDistributor {
 
     uint256 public immutable endTime;
 
-    constructor(address token_, bytes32 merkleRoot_, uint256 endTime_, address owner_) 
-        MerkleDistributor(token_, merkleRoot_, owner_) 
+    constructor(address token_, bytes32 merkleRoot_, uint256 endTime_, address owner_, address funder_) 
+        MerkleDistributor(token_, merkleRoot_, owner_, funder_) 
     {
         if (endTime_ <= block.timestamp) revert EndTimeInPast();
         endTime = endTime_;
